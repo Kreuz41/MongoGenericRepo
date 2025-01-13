@@ -112,8 +112,9 @@ public class MongoCrudRepository<TEntity, TEntityId> : IMongoCrudRepository<TEnt
 
         try
         {
+            var filter = Builders<TEntity>.Filter.Eq(_idFieldName, id);
             var result = await _collection.ReplaceOneAsync(
-                b => b.ObjectId!.Equals(id),
+                filter,
                 updatedEntity,
                 cancellationToken: cancellationToken);
 
@@ -134,8 +135,10 @@ public class MongoCrudRepository<TEntity, TEntityId> : IMongoCrudRepository<TEnt
 
         try
         {
+            var filter = Builders<TEntity>.Filter.Eq(_idFieldName, id);
+            
             var result = await _collection.ReplaceOneAsync(
-                b => b.ObjectId!.Equals(id),
+                filter,
                 entity,
                 new ReplaceOptions { IsUpsert = true },
                 cancellationToken);
@@ -157,8 +160,9 @@ public class MongoCrudRepository<TEntity, TEntityId> : IMongoCrudRepository<TEnt
 
         try
         {
+            var filter = Builders<TEntity>.Filter.Eq(_idFieldName, id);
             var result = await _collection.DeleteOneAsync(
-                b => b.ObjectId!.Equals(id),
+                filter,
                 cancellationToken);
             
             _logger.LogInformation(result.DeletedCount > 0 
