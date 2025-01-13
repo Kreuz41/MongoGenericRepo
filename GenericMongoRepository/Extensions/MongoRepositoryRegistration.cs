@@ -20,6 +20,12 @@ public static class MongoRepositoryRegistration
             .Where(t => t is { IsClass: true, IsAbstract: false, BaseType.IsGenericType: true } &&
                         t.BaseType.GetGenericTypeDefinition() == typeof(MongoCrudRepository<,>))
             .ToList();
+        
+        var implementingInterfaces = assembly.GetTypes()
+            .Where(type => type is { IsInterface: true, IsGenericTypeDefinition: false })
+            .Where(type => type.GetInterfaces()
+                .Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IMongoCrudRepository<,>)))
+            .ToList();
 
         foreach (var entityType in entityTypes)
         {
@@ -34,9 +40,11 @@ public static class MongoRepositoryRegistration
             
             if (customRepositoryType != null)
             {
-                var interfaceType = typeof(IMongoCrudRepository<,>).MakeGenericType(entityType, idType);
-                AddMongoRepository(services, database, customRepositoryType, 
-                    interfaceType, mongoCollectionNameAttribute.CollectionName, mongoCollectionNameAttribute.IdName);
+                var createdBaseInterface = typeof(IMongoCrudRepository<,>).MakeGenericType(entityType, idType);
+
+                var interfaceType = customRepositoryType.GetInterfaces().FirstOrDefault(t => t != createdBaseInterface)!;
+                AddMongoRepository(services, database, interfaceType, customRepositoryType, 
+                    mongoCollectionNameAttribute.CollectionName, mongoCollectionNameAttribute.IdName);
 
                 continue;
             }

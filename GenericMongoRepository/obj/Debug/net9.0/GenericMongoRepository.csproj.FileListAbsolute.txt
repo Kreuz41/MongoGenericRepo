@@ -34,3 +34,4 @@ C:\Projects\GenericMongoRepository\GenericMongoRepository\obj\Debug\net9.0\refin
 C:\Projects\GenericMongoRepository\GenericMongoRepository\obj\Debug\net9.0\GenericMongoRepository.pdb
 C:\Projects\GenericMongoRepository\GenericMongoRepository\obj\Debug\net9.0\GenericMongoRepository.genruntimeconfig.cache
 C:\Projects\GenericMongoRepository\GenericMongoRepository\obj\Debug\net9.0\ref\GenericMongoRepository.dll
+C:\Projects\GenericMongoRepository\GenericMongoRepository\obj\Debug\net9.0\GenericMongoRepository.sourcelink.json

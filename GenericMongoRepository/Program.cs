@@ -14,5 +14,6 @@ var app = builder.Build();
 
 app.MapGet("/get/{id:long}", (BattlePassService service, long id) => service.GetByIdAsync(id));
 app.MapGet("/getList", (BattlePassService service, [FromQuery] int take, [FromQuery] int skip) => service.GetAllAsync(skip, take));
+app.MapGet("/hello/{name}", (BattlePassService service, string name) => service.SayHelloAsync(name));
 
 app.Run();
