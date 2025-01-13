@@ -10,53 +10,75 @@ public static class MongoRepositoryRegistration
     public static IServiceCollection AddMongoRepositories(this IServiceCollection services, IMongoDatabase database)
     {
         var assembly = Assembly.GetExecutingAssembly();
-        
-        var entityTypes = assembly.GetTypes()
-            .Where(t => t is { IsClass: true, IsAbstract: false } && 
-                        t.GetCustomAttribute<MongoEntityAttribute>() != null)
-            .ToList();
-        
-        var customRepositoryTypes = assembly.GetTypes()
-            .Where(t => t is { IsClass: true, IsAbstract: false, BaseType.IsGenericType: true } &&
-                        t.BaseType.GetGenericTypeDefinition() == typeof(MongoCrudRepository<,>))
-            .ToList();
-        
-        var implementingInterfaces = assembly.GetTypes()
-            .Where(type => type is { IsInterface: true, IsGenericTypeDefinition: false })
-            .Where(type => type.GetInterfaces()
-                .Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IMongoCrudRepository<,>)))
-            .ToList();
+
+        var entityTypes = GetEntityTypesWithAttribute<MongoEntityAttribute>(assembly);
+        var customRepositoryTypes = GetCustomRepositoryTypes(assembly);
 
         foreach (var entityType in entityTypes)
         {
-            var mongoCollectionNameAttribute = entityType.GetCustomAttribute<MongoEntityAttribute>();
-            if (mongoCollectionNameAttribute == null) continue;
-            
+            var attribute = entityType.GetCustomAttribute<MongoEntityAttribute>();
+            if (attribute == null) continue;
+
             var idType = entityType.BaseType?.GenericTypeArguments.FirstOrDefault();
-            if (idType == null) throw new InvalidOperationException($"Unable to determine ID type for {entityType.Name}");
-            
-            var customRepositoryType = customRepositoryTypes?
-                .FirstOrDefault(repo => repo.BaseType?.GenericTypeArguments[0] == entityType);
-            
+            if (idType == null)
+                throw new InvalidOperationException($"Unable to determine ID type for {entityType.Name}");
+
+            var customRepositoryType = FindCustomRepositoryType(customRepositoryTypes, entityType);
+
             if (customRepositoryType != null)
             {
-                var createdBaseInterface = typeof(IMongoCrudRepository<,>).MakeGenericType(entityType, idType);
-
-                var interfaceType = customRepositoryType.GetInterfaces().FirstOrDefault(t => t != createdBaseInterface)!;
+                var interfaceType = GetCustomRepositoryInterface(customRepositoryType, entityType, idType);
                 AddMongoRepository(services, database, interfaceType, customRepositoryType, 
-                    mongoCollectionNameAttribute.CollectionName, mongoCollectionNameAttribute.IdName);
-
-                continue;
+                    attribute.CollectionName, attribute.IdName);
             }
-            
-            var defaultRepositoryType = typeof(MongoCrudRepository<,>).MakeGenericType(entityType, idType);
-            var defaultInterfaceType = typeof(IMongoCrudRepository<,>).MakeGenericType(entityType, idType);
-
-            AddMongoRepository(services, database, defaultInterfaceType, defaultRepositoryType, 
-                mongoCollectionNameAttribute.CollectionName, mongoCollectionNameAttribute.IdName);
+            else
+            {
+                RegisterDefaultRepository(services, database, entityType, idType, attribute.CollectionName, attribute.IdName);
+            }
         }
 
         return services;
+    }
+
+    private static List<Type> GetEntityTypesWithAttribute<TAttribute>(Assembly assembly) where TAttribute : Attribute
+    {
+        return assembly.GetTypes()
+            .Where(t => t.IsClass && !t.IsAbstract && t.GetCustomAttribute<TAttribute>() != null)
+            .ToList();
+    }
+
+    private static List<Type> GetCustomRepositoryTypes(Assembly assembly)
+    {
+        return assembly.GetTypes()
+            .Where(t => t.IsClass && !t.IsAbstract && t.BaseType?.IsGenericType == true &&
+                        t.BaseType.GetGenericTypeDefinition() == typeof(MongoCrudRepository<,>))
+            .ToList();
+    }
+
+    private static Type? FindCustomRepositoryType(List<Type> customRepositoryTypes, Type entityType)
+    {
+        return customRepositoryTypes
+            .FirstOrDefault(repo => repo.BaseType?.GenericTypeArguments[0] == entityType);
+    }
+
+    private static Type GetCustomRepositoryInterface(Type customRepositoryType, Type entityType, Type idType)
+    {
+        var baseInterface = typeof(IMongoCrudRepository<,>).MakeGenericType(entityType, idType);
+        return customRepositoryType.GetInterfaces().First(t => t != baseInterface);
+    }
+
+    private static void RegisterDefaultRepository(
+        IServiceCollection services,
+        IMongoDatabase database,
+        Type entityType,
+        Type idType,
+        string collectionName,
+        string idFieldName)
+    {
+        var repositoryType = typeof(MongoCrudRepository<,>).MakeGenericType(entityType, idType);
+        var interfaceType = typeof(IMongoCrudRepository<,>).MakeGenericType(entityType, idType);
+
+        AddMongoRepository(services, database, interfaceType, repositoryType, collectionName, idFieldName);
     }
 
     private static void AddMongoRepository(
@@ -71,6 +93,7 @@ public static class MongoRepositoryRegistration
         {
             var loggerType = typeof(ILogger<>).MakeGenericType(implementationType);
             var logger = sp.GetRequiredService(loggerType);
+
             return Activator.CreateInstance(implementationType, logger, database, collectionName, idFieldName)
                    ?? throw new InvalidOperationException($"Unable to create instance of {implementationType.FullName}");
         });
